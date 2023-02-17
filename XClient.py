@@ -46,22 +46,24 @@ def handle_tcp_conn_recv(stcp_socket, udp_socket):
     read from tcp socket for the UDP segment received through the tunnel,
     then forward received segment to incom_udp_addr
     """
-    message = read_from_tcp_sock(stcp_socket)
-    header = message[:message.decode().find('_')]
-    ip, port = header.decode().split('-')
-    port = int(port)
-    udp_socket.sendto(message[message.decode().find('_') + 1:], (ip, port))
+    while True:
+        message = read_from_tcp_sock(stcp_socket)
+        header = message[:message.decode().find('_')]
+        ipr, portr, ipc, portc = header.decode().split('-')
+        portc = int(portc)
+        udp_socket.sendto(message[message.decode().find('_') + 1:], (ipc, portc))
 
 
-def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, udp_to_tcp_queue):
+def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, client_udp_addr, udp_to_tcp_queue):
     """
     get remote UDP ip and port(rmt_udp_addr) and Concat them then sending it to the TCP socket
     after that read from udp_to_tcp_queue for sending a UDP segment and update queue,
     don't forgot to block the queue when you are reading from it.
     """
     while True:
-        main_message = udp_to_tcp_queue.get(block=True, timeout=0)
-        header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' + '_'
+        main_message = udp_to_tcp_queue.get(block=True)
+        header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' +\
+                 client_udp_addr[0] + '-' + str(client_udp_addr) + '_'
         message: str = header + main_message.decode()
         stcp_socket.send(message.encode())
 
@@ -77,7 +79,7 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
     """
     udp_remote_mapping = {}
     while True:
-        data, address = udp_socket.recvfrom(buffer_size)
+        message, address = udp_socket.recvfrom(buffer_size)
         if address not in udp_remote_mapping.keys():
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             context.load_verify_locations('cer.pem')
@@ -95,13 +97,13 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
                 logging.info("Bind to the TCP socket {}:{}".format(tcp_server_addr[0], tcp_server_addr[1]))
 
             tcp_queue = mp.Queue()
-            tcp_queue.put(data)
+            tcp_queue.put(message)
             udp_remote_mapping[address] = tcp_queue
 
             t = threading.Thread(target=handle_tcp_conn_send, args=(tcp_safe_socket, rmt_udp_addr, tcp_queue))
             t.start()
         else:
-            udp_remote_mapping[address].put(data)
+            udp_remote_mapping[address].put(message)
 
 
 if __name__ == "__main__":
