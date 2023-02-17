@@ -59,11 +59,10 @@ def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, udp_to_tcp_queue):
     after that read from udp_to_tcp_queue for sending a UDP segment and update queue,
     don't forgot to block the queue when you are reading from it.
     """
-    while True:
-        main_message = udp_to_tcp_queue.get(block=True, timeout=0)
-        header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' + '_'
-        message: str = header + main_message.decode()
-        stcp_socket.send(message.encode())
+    main_message = udp_to_tcp_queue.get(block=True, timeout=0)
+    header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' + '_'
+    message: str = header + main_message.decode()
+    stcp_socket.send(message.encode())
 
 
 def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
