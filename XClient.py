@@ -9,7 +9,9 @@ import sys
 import argparse
 import random
 import time
+import threading
 
+buffer_size = 1024
 
 def parse_input_argument():
     parser = argparse.ArgumentParser(description='This is a client program that create a tunnel\
@@ -28,24 +30,27 @@ def parse_input_argument():
     return args
 
 
-def read_n_byte_from_tcp_sock(sock, n):
+def read_from_tcp_sock(sock):
     """Just for read n byte  from tcp socket"""
-    buff = bytearray(n)
-    pos = 0
-    while pos < n:
-        cr = sock.recv_into(memoryview(buff)[pos:])
-        if cr == 0:
-            raise EOFError
-        pos += cr
+    buff = bytearray()
+    buffer = sock.recv(buffer_size)
+    while len(buffer) == buffer_size:
+        buff += buffer
+        buffer = sock.recv(buffer_size)
+    buff += buffer
     return buff
 
 
-def handle_tcp_conn_recv(stcp_socket, udp_socket, incom_udp_addr):
+def handle_tcp_conn_recv(stcp_socket, udp_socket):
     """
     read from tcp socket for the UDP segment received through the tunnel,
     then forward received segment to incom_udp_addr
     """
-    pass
+    message = read_from_tcp_sock(stcp_socket)
+    header = message[:message.decode().find('_')]
+    ip, port = header.decode().split('-')
+    port = int(port)
+    udp_socket.sendto(message[message.decode().find('_') + 1:], (ip, port))
 
 
 def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, udp_to_tcp_queue):
@@ -55,9 +60,9 @@ def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, udp_to_tcp_queue):
     don't forgot to block the queue when you are reading from it.
     """
     main_message = udp_to_tcp_queue.get(block=True, timeout=0)
-    header = bytearray(rmt_udp_addr[0] + str(rmt_udp_addr[1]))
-    message = header + main_message
-    stcp_socket.sendall(message)
+    header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' + '_'
+    message: str = header + main_message.decode()
+    stcp_socket.send(message.encode())
 
 
 def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
@@ -68,8 +73,34 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
         if incom_udp_addr not in udp_conn_list, Recognize a new UDP connection from incom_udp_addr. So establish a TCP connection to the remote server for it
         and if incom_udp_addr in udp_conn_list you should continue sending in esteblished socekt  ,
         you need a queue for connecting udp_recv thread to tcp_send thread.
-         """
-    pass
+    """
+    udp_remote_mapping = {}
+    while True:
+        data, address = udp_socket.recvfrom(buffer_size)
+        if address not in udp_remote_mapping.keys():
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.load_verify_locations('cer.pem')
+            tcp_safe_socket = context.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                                                  server_hostname=tcp_server_addr[0])
+            try:
+                tcp_safe_socket.connect(tcp_server_addr)
+            except socket.error as e:
+                logging.error("(Error) Error openning the TCP socket: {}".format(e))
+                logging.error(
+                    "(Error) Cannot open the TCP socket {}:{} or bind to it".format(tcp_server_addr[0],
+                                                                                    tcp_server_addr[1]))
+                sys.exit(1)
+            else:
+                logging.info("Bind to the TCP socket {}:{}".format(tcp_server_addr[0], tcp_server_addr[1]))
+
+            tcp_queue = mp.Queue()
+            tcp_queue.put(data)
+            udp_remote_mapping[address] = tcp_queue
+
+            t = threading.Thread(target=handle_tcp_conn_send, args=(tcp_safe_socket, rmt_udp_addr, tcp_queue))
+            t.start()
+        else:
+            udp_remote_mapping[address].put(data)
 
 
 if __name__ == "__main__":
