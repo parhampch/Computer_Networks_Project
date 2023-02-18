@@ -1,14 +1,7 @@
-import multiprocessing as mp
 import socket
 import logging
-# import numpy as np
-from queue import Queue
 import ssl
-import time
 import sys
-import argparse
-import random
-import time
 import threading
 import yaml
 
@@ -28,15 +21,37 @@ def read_from_tcp_sock(sock):
         buff += buffer
         buffer = sock.recv(buffer_size)
     buff += buffer
-    return buff
+    return buff.decode().strip(' ').encode()
 
 
 def send_to_tcp_socket(sock, message):
+    if len(message) % buffer_size == 0:
+        message += ' '
     index = 0
-    while index + buffer_size <= len(message):
+    while index + buffer_size < len(message):
         sock.send(message[index:index + buffer_size].encode())
         index += buffer_size
     sock.send(message[index:len(message)].encode())
+
+
+def read_from_udp_sock(sock):
+    buff = bytearray()
+    buffer, address = sock.recvfrom(buffer_size)
+    while len(buffer) == buffer_size:
+        buff += buffer
+        buffer, address = sock.recvfrom(buffer_size)
+    buff += buffer
+    return buff.decode().strip(' ').encode(), address
+
+
+def send_to_udp_socket(sock, message, address):
+    if len(message) % buffer_size == 0:
+        message += ' '
+    index = 0
+    while index + buffer_size < len(message):
+        sock.sendto(message[index:index + buffer_size].encode(), address)
+        index += buffer_size
+    sock.sendto(message[index:len(message)].encode(), address)
 
 
 def handle_tcp_conn_recv(stcp_socket):
@@ -47,14 +62,14 @@ def handle_tcp_conn_recv(stcp_socket):
         ipr, portr, ipc, portc = header.decode().split('#')
         portr = int(portr)
         udp_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        udp_socket.sendto(message[message.decode().find('$') + 1:], (ipr, portr))
+        send_to_udp_socket(udp_socket, message[message.decode().find('$') + 1:].decode(), (ipr, portr))
         logging.info("Message {} sent successfully to UDP connection".format(message.decode()))
         threading.Thread(target=handle_udp_conn_recv_tcp_send, args=(stcp_socket, udp_socket, header, )).start()
 
 
 def handle_udp_conn_recv_tcp_send(stcp_socket, udp_socket, header):
     while True:
-        main_message, address = udp_socket.recvfrom(buffer_size)
+        main_message, address = read_from_udp_sock(udp_socket)
         logging.info("Message {} received successfully from UDP connection".format(main_message.decode()))
         message = header.decode() + '$' +main_message.decode()
         send_to_tcp_socket(stcp_socket, message)

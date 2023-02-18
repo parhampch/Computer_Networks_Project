@@ -1,13 +1,8 @@
 import multiprocessing as mp
 import socket
 import logging
-# import numpy as np
-from queue import Queue
 import ssl
-import time
 import sys
-import argparse
-import random
 import time
 import threading
 import yaml
@@ -29,15 +24,37 @@ def read_from_tcp_sock(sock):
         buff += buffer
         buffer = sock.recv(buffer_size)
     buff += buffer
-    return buff
+    return buff.decode().strip(' ').encode()
 
 
 def send_to_tcp_socket(sock, message):
+    if len(message) % buffer_size == 0:
+        message += ' '
     index = 0
-    while index + buffer_size <= len(message):
+    while index + buffer_size < len(message):
         sock.send(message[index:index + buffer_size].encode())
         index += buffer_size
     sock.send(message[index:len(message)].encode())
+
+
+def read_from_udp_sock(sock):
+    buff = bytearray()
+    buffer, address = sock.recvfrom(buffer_size)
+    while len(buffer) == buffer_size:
+        buff += buffer
+        buffer, address = sock.recvfrom(buffer_size)
+    buff += buffer
+    return buff.decode().strip(' ').encode(), address
+
+
+def send_to_udp_socket(sock, message, address):
+    if len(message) % buffer_size == 0:
+        message += ' '
+    index = 0
+    while index + buffer_size < len(message):
+        sock.sendto(message[index:index + buffer_size].encode(), address)
+        index += buffer_size
+    sock.sendto(message[index:len(message)].encode(), address)
 
 
 def handle_tcp_conn_recv(stcp_socket, udp_socket):
@@ -52,7 +69,7 @@ def handle_tcp_conn_recv(stcp_socket, udp_socket):
         ipr, portr, ipc, portc = header.decode().split('#')
         portc = int(portc)
         logging.info("Message {} received successfully from TCP connection".format(message.decode()))
-        udp_socket.sendto(message[message.decode().find('$') + 1:], (ipc, portc))
+        send_to_udp_socket(udp_socket, message[message.decode().find('$') + 1:].decode(), (ipc, portc))
         logging.info("Message {} sent successfully to UDP connection".format(message.decode()))
 
 
@@ -82,7 +99,8 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
     """
     udp_remote_mapping = {}
     while True:
-        message, address = udp_socket.recvfrom(buffer_size)
+        message, address = read_from_udp_sock(udp_socket)
+        logging.info("Message {} received successfully from UDP connection".format(message.decode()))
         if address not in udp_remote_mapping.keys():
             tcp_safe_socket = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM),
                                                   cert_reqs=ssl.CERT_REQUIRED, ca_certs="server.crt",
