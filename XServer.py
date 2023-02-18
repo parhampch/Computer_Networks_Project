@@ -64,24 +64,31 @@ if __name__ == "__main__":
     tcp_server_port = args['server'][1]
     tcp_server_addr = (tcp_server_ip, tcp_server_port)
 
-    if args.verbosity == 'error':
+    if args['verbosity'] == 'error':
         log_level = logging.ERROR
-    elif args.verbosity == 'info':
+    elif args['verbosity'] == 'info':
         log_level = logging.INFO
-    elif args.verbosity == 'debug':
+    elif args['verbosity'] == 'debug':
         log_level = logging.DEBUG
     format = "%(asctime)s: (%(levelname)s) %(message)s"
     logging.basicConfig(format=format, level=log_level, datefmt="%H:%M:%S")
 
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain('cert.pem', 'key.pem')
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(tcp_server_addr)
-    s.listen()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(tcp_server_addr)
+        s.listen()
+    except socket.error as e:
+        logging.error("(Error) Error openning the UDP socket: {}".format(e))
+        logging.error(
+            "(Error) Cannot open the UDP socket {}:{} or bind to it".format(tcp_server_ip, tcp_server_port))
+        sys.exit(1)
+    else:
+        logging.info("Bind to the UDP socket {}:{}".format(tcp_server_ip, tcp_server_port))
 
     while True:
         conn, address = s.accept()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain('cert.pem', 'key.pem')
         safe_socket = context.wrap_socket(conn, server_hostname=tcp_server_addr[0])
         threading.Thread(target=handle_tcp_conn_recv, args=(safe_socket, ))
 
