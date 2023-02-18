@@ -13,6 +13,7 @@ import threading
 
 buffer_size = 1024
 
+
 def parse_input_argument():
     parser = argparse.ArgumentParser(description='This is a client program that create a tunnel\
                                                   to the server over various TCP connections.')
@@ -41,6 +42,14 @@ def read_from_tcp_sock(sock):
     return buff
 
 
+def send_to_tcp_socket(sock, message):
+    index = 0
+    while index + buffer_size <= len(message):
+        sock.send(message[index:index + buffer_size].encode())
+        index += buffer_size
+    sock.send(message[index:len(message)].encode())
+
+
 def handle_tcp_conn_recv(stcp_socket, udp_socket):
     """
     read from tcp socket for the UDP segment received through the tunnel,
@@ -65,7 +74,7 @@ def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, client_udp_addr, udp_to_tcp_
         header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' +\
                  client_udp_addr[0] + '-' + str(client_udp_addr) + '_'
         message: str = header + main_message.decode()
-        stcp_socket.send(message.encode())
+        send_to_tcp_socket(stcp_socket, message)
 
 
 def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
@@ -100,8 +109,9 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
             tcp_queue.put(message)
             udp_remote_mapping[address] = tcp_queue
 
-            t = threading.Thread(target=handle_tcp_conn_send, args=(tcp_safe_socket, rmt_udp_addr, tcp_queue))
-            t.start()
+            threading.Thread(target=handle_tcp_conn_send, args=(tcp_safe_socket, rmt_udp_addr, tcp_queue)).start()
+
+            threading.Thread(target=handle_tcp_conn_recv, args=(tcp_safe_socket, udp_socket)).start()
         else:
             udp_remote_mapping[address].put(message)
 

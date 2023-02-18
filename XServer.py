@@ -41,6 +41,14 @@ def read_from_tcp_sock(sock):
     return buff
 
 
+def send_to_tcp_socket(sock, message):
+    index = 0
+    while index + buffer_size <= len(message):
+        sock.send(message[index:index + buffer_size].encode())
+        index += buffer_size
+    sock.send(message[index:len(message)].encode())
+
+
 def handle_tcp_conn_recv(stcp_socket):
     while True:
         message = read_from_tcp_sock(stcp_socket)
@@ -56,7 +64,7 @@ def handle_udp_conn_recv_tcp_send(stcp_socket, udp_socket, header):
     while True:
         main_message, address = udp_socket.recvfrom(buffer_size)
         message = header + main_message
-        stcp_socket.send(message.encode())
+        send_to_tcp_socket(stcp_socket, message)
 
 
 if __name__ == "__main__":
@@ -85,6 +93,7 @@ if __name__ == "__main__":
     while True:
         conn, address = s.accept()
         safe_socket = context.wrap_socket(conn, server_hostname=tcp_server_addr[0])
+        threading.Thread(target=handle_tcp_conn_recv, args=(safe_socket, ))
 
 
 
