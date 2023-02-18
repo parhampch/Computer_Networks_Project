@@ -1,6 +1,6 @@
 import socket
 
-buffer_size = 5
+buffer_size = 1024
 
 if __name__ == '__main__':
 

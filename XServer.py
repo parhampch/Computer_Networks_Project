@@ -24,12 +24,10 @@ def parse_input_argument():
 def read_from_tcp_sock(sock):
     buff = bytearray()
     buffer = sock.recv(buffer_size)
-    print("pre done")
     while len(buffer) == buffer_size:
         buff += buffer
         buffer = sock.recv(buffer_size)
     buff += buffer
-    print("done")
     return buff
 
 
@@ -44,7 +42,6 @@ def send_to_tcp_socket(sock, message):
 def handle_tcp_conn_recv(stcp_socket):
     while True:
         message = read_from_tcp_sock(stcp_socket)
-        print(message)
         logging.info("Message {} received successfully from TCP connection".format(message))
         header = message[:message.decode().find('_')]
         ipr, portr, ipc, portc = header.decode().split('-')
@@ -82,12 +79,8 @@ if __name__ == "__main__":
 
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certfile='cert.pem', keyfile='key.key')
         s.bind(tcp_server_addr)
         s.listen(5)
-        safe_socket = context.wrap_socket(s, server_side=True)
-        print("parham")
     except socket.error as e:
         logging.error("(Error) Error openning the UDP socket: {}".format(e))
         logging.error(
@@ -97,12 +90,10 @@ if __name__ == "__main__":
         logging.info("Bind to the UDP socket {}:{}".format(tcp_server_ip, tcp_server_port))
 
     while True:
-        conn, address = safe_socket.accept()
-        #context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        #context.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
-        print("amoo")
-        #safe_socket = context.wrap_socket(conn, server_side=True)
-        threading.Thread(target=handle_tcp_conn_recv, args=(conn, )).start()
+        conn, address = s.accept()
+        safe_socket = ssl.wrap_socket(conn, server_side=True, certfile='server.crt', keyfile='server.key',
+                                      ssl_version=ssl.PROTOCOL_TLS)
+        threading.Thread(target=handle_tcp_conn_recv, args=(safe_socket, )).start()
 
 
 

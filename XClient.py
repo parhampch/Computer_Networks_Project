@@ -35,15 +35,9 @@ def read_from_tcp_sock(sock):
 def send_to_tcp_socket(sock, message):
     index = 0
     while index + buffer_size <= len(message):
-        print(message[index:index + buffer_size])
         sock.send(message[index:index + buffer_size].encode())
         index += buffer_size
-    print("Done1")
-    # print(message)
-    print(message[index:index + buffer_size])
     sock.send(message[index:len(message)].encode())
-
-    print("Done2")
 
 
 def handle_tcp_conn_recv(stcp_socket, udp_socket):
@@ -70,16 +64,11 @@ def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, client_udp_addr, udp_to_tcp_
     don't forgot to block the queue when you are reading from it.
     """
     while True:
-        format = "%(asctime)s: (%(levelname)s) %(message)s"
-        logging.basicConfig(format=format, level='info', datefmt="%H:%M:%S")
         main_message = udp_to_tcp_queue.get(block=True)
-        print(main_message)
         header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' +\
                  client_udp_addr[0] + '-' + str(client_udp_addr[1]) + '_'
         message: str = header + main_message.decode()
-        print('Here5')
         send_to_tcp_socket(stcp_socket, message)
-        print('Here6')
         logging.info("Message {} sent successfully to TCP connection".format(message))
 
 
@@ -96,12 +85,9 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
     while True:
         message, address = udp_socket.recvfrom(buffer_size)
         if address not in udp_remote_mapping.keys():
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            context.load_verify_locations('cert.pem')
-            tcp_safe_socket = context.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM),
-                                                  server_hostname=tcp_server_addr[0])
-            # tcp_safe_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            print('Here1')
+            tcp_safe_socket = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                                                  cert_reqs=ssl.CERT_REQUIRED, ca_certs="server.crt",
+                                                  ssl_version=ssl.PROTOCOL_TLS)
             try:
                 tcp_safe_socket.connect(tcp_server_addr)
             except socket.error as e:
@@ -116,11 +102,8 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
             tcp_queue = mp.Queue()
             tcp_queue.put(message)
             udp_remote_mapping[address] = tcp_queue
-            print('Here2')
             threading.Thread(target=handle_tcp_conn_send, args=(tcp_safe_socket, rmt_udp_addr, address, tcp_queue)).start()
-            print('Here3')
             threading.Thread(target=handle_tcp_conn_recv, args=(tcp_safe_socket, udp_socket)).start()
-            print('Here4')
         else:
             udp_remote_mapping[address].put(message)
 
