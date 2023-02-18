@@ -46,15 +46,14 @@ def handle_tcp_conn_recv(stcp_socket, udp_socket):
     then forward received segment to incom_udp_addr
     """
     while True:
-        format = "%(asctime)s: (%(levelname)s) %(message)s"
         logging.basicConfig(format=format, level='info', datefmt="%H:%M:%S")
         message = read_from_tcp_sock(stcp_socket)
-        header = message[:message.decode().find('_')]
-        ipr, portr, ipc, portc = header.decode().split('-')
+        header = message[:message.decode().find('$')]
+        ipr, portr, ipc, portc = header.decode().split('#')
         portc = int(portc)
-        logging.info("Message {} received successfully from TCP connection".format(message))
-        udp_socket.sendto(message[message.decode().find('_') + 1:], (ipc, portc))
-        logging.info("Message {} sent successfully to UDP connection".format(message))
+        logging.info("Message {} received successfully from TCP connection".format(message.decode()))
+        udp_socket.sendto(message[message.decode().find('$') + 1:], (ipc, portc))
+        logging.info("Message {} sent successfully to UDP connection".format(message.decode()))
 
 
 def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, client_udp_addr, udp_to_tcp_queue):
@@ -65,8 +64,8 @@ def handle_tcp_conn_send(stcp_socket, rmt_udp_addr, client_udp_addr, udp_to_tcp_
     """
     while True:
         main_message = udp_to_tcp_queue.get(block=True)
-        header = rmt_udp_addr[0] + '-' + str(rmt_udp_addr[1]) + '-' +\
-                 client_udp_addr[0] + '-' + str(client_udp_addr[1]) + '_'
+        header = rmt_udp_addr[0] + '#' + str(rmt_udp_addr[1]) + '#' +\
+                 client_udp_addr[0] + '#' + str(client_udp_addr[1]) + '$'
         message: str = header + main_message.decode()
         send_to_tcp_socket(stcp_socket, message)
         logging.info("Message {} sent successfully to TCP connection".format(message))
@@ -142,7 +141,7 @@ if __name__ == "__main__":
         else:
             logging.info("Bind to the UDP socket {}:{}".format(udp_listening_ip, udp_listening_port))
 
-        mp.Process(target=handle_udp_conn_recv,
+        threading.Thread(target=handle_udp_conn_recv,
                    args=(udp_socket, tcp_server_addr, rmt_udp_addr)).start()
 
     try:

@@ -42,21 +42,21 @@ def send_to_tcp_socket(sock, message):
 def handle_tcp_conn_recv(stcp_socket):
     while True:
         message = read_from_tcp_sock(stcp_socket)
-        logging.info("Message {} received successfully from TCP connection".format(message))
-        header = message[:message.decode().find('_')]
-        ipr, portr, ipc, portc = header.decode().split('-')
+        logging.info("Message {} received successfully from TCP connection".format(message.decode()))
+        header = message[:message.decode().find('$')]
+        ipr, portr, ipc, portc = header.decode().split('#')
         portr = int(portr)
         udp_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        udp_socket.sendto(message[message.decode().find('_') + 1:], (ipr, portr))
-        logging.info("Message {} sent successfully to UDP connection".format(message))
+        udp_socket.sendto(message[message.decode().find('$') + 1:], (ipr, portr))
+        logging.info("Message {} sent successfully to UDP connection".format(message.decode()))
         threading.Thread(target=handle_udp_conn_recv_tcp_send, args=(stcp_socket, udp_socket, header, )).start()
 
 
 def handle_udp_conn_recv_tcp_send(stcp_socket, udp_socket, header):
     while True:
         main_message, address = udp_socket.recvfrom(buffer_size)
-        logging.info("Message {} received successfully from UDP connection".format(main_message))
-        message = header.decode() + '_' +main_message.decode()
+        logging.info("Message {} received successfully from UDP connection".format(main_message.decode()))
+        message = header.decode() + '$' +main_message.decode()
         send_to_tcp_socket(stcp_socket, message)
         logging.info("Message {} sent successfully to TCP connection".format(message))
 
