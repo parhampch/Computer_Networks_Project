@@ -24,10 +24,12 @@ def parse_input_argument():
 def read_from_tcp_sock(sock):
     buff = bytearray()
     buffer = sock.recv(buffer_size)
+    print("pre done")
     while len(buffer) == buffer_size:
         buff += buffer
         buffer = sock.recv(buffer_size)
     buff += buffer
+    print("done")
     return buff
 
 
@@ -42,19 +44,24 @@ def send_to_tcp_socket(sock, message):
 def handle_tcp_conn_recv(stcp_socket):
     while True:
         message = read_from_tcp_sock(stcp_socket)
+        print(message)
+        logging.info("Message {} received successfully from TCP connection".format(message))
         header = message[:message.decode().find('_')]
         ipr, portr, ipc, portc = header.decode().split('-')
         portr = int(portr)
         udp_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         udp_socket.sendto(message[message.decode().find('_') + 1:], (ipr, portr))
+        logging.info("Message {} sent successfully to UDP connection".format(message))
         threading.Thread(target=handle_udp_conn_recv_tcp_send, args=(stcp_socket, udp_socket, header, )).start()
 
 
 def handle_udp_conn_recv_tcp_send(stcp_socket, udp_socket, header):
     while True:
         main_message, address = udp_socket.recvfrom(buffer_size)
-        message = header + main_message
+        logging.info("Message {} received successfully from UDP connection".format(main_message))
+        message = header.decode() + '_' +main_message.decode()
         send_to_tcp_socket(stcp_socket, message)
+        logging.info("Message {} sent successfully to TCP connection".format(message))
 
 
 if __name__ == "__main__":
@@ -75,8 +82,12 @@ if __name__ == "__main__":
 
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile='cert.pem', keyfile='key.key')
         s.bind(tcp_server_addr)
-        s.listen()
+        s.listen(5)
+        safe_socket = context.wrap_socket(s, server_side=True)
+        print("parham")
     except socket.error as e:
         logging.error("(Error) Error openning the UDP socket: {}".format(e))
         logging.error(
@@ -86,11 +97,12 @@ if __name__ == "__main__":
         logging.info("Bind to the UDP socket {}:{}".format(tcp_server_ip, tcp_server_port))
 
     while True:
-        conn, address = s.accept()
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain('cert.pem', 'key.pem')
-        safe_socket = context.wrap_socket(conn, server_hostname=tcp_server_addr[0])
-        threading.Thread(target=handle_tcp_conn_recv, args=(safe_socket, ))
+        conn, address = safe_socket.accept()
+        #context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        #context.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
+        print("amoo")
+        #safe_socket = context.wrap_socket(conn, server_side=True)
+        threading.Thread(target=handle_tcp_conn_recv, args=(conn, )).start()
 
 
 
