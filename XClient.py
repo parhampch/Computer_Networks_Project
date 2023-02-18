@@ -10,24 +10,14 @@ import argparse
 import random
 import time
 import threading
+import yaml
 
 buffer_size = 1024
 
 
 def parse_input_argument():
-    parser = argparse.ArgumentParser(description='This is a client program that create a tunnel\
-                                                  to the server over various TCP connections.')
-
-    parser.add_argument('-ut', '--udp-tunnel', action='append', required=True,
-                        help="Make a tunnel from the client to the server. The format is\
-                              'listening ip:listening port:remote ip:remote port'.")
-    parser.add_argument('-s', '--server', required=True,
-                        help="The IP address and (TCP) port number of the tunnel server.\
-                               The format is 'server ip:server port'.")
-    parser.add_argument('-v', '--verbosity', choices=['error', 'info', 'debug'], default='info',
-                        help="Determine the verbosity of the messages. The default value is 'info'.")
-
-    args = parser.parse_args()
+    xcfile = open('XClientConfig.yml', 'r')
+    args = yaml.safe_load(xcfile)
     return args
 
 
@@ -119,25 +109,24 @@ def handle_udp_conn_recv(udp_socket, tcp_server_addr, rmt_udp_addr):
 if __name__ == "__main__":
     args = parse_input_argument()
 
-    tcp_server_ip = args.server.split(':')[0]
-    tcp_server_port = int(args.server.split(':')[1])
+    tcp_server_ip = args['server'][0]
+    tcp_server_port = args['server'][1]
     tcp_server_addr = (tcp_server_ip, tcp_server_port)
 
-    if args.verbosity == 'error':
+    if args['verbosity'] == 'error':
         log_level = logging.ERROR
-    elif args.verbosity == 'info':
+    elif args['verbosity'] == 'info':
         log_level = logging.INFO
-    elif args.verbosity == 'debug':
+    elif args['verbosity'] == 'debug':
         log_level = logging.DEBUG
     format = "%(asctime)s: (%(levelname)s) %(message)s"
     logging.basicConfig(format=format, level=log_level, datefmt="%H:%M:%S")
 
-    for tun_addr in args.udp_tunnel:
-        tun_addr_split = tun_addr.split(':')
-        udp_listening_ip = tun_addr_split[0]
-        udp_listening_port = int(tun_addr_split[1])
-        rmt_udp_ip = tun_addr_split[2]
-        rmt_udp_port = int(tun_addr_split[3])
+    for tun_addr in args['udp_tunnel']:
+        udp_listening_ip = tun_addr[0]
+        udp_listening_port = tun_addr[1]
+        rmt_udp_ip = tun_addr[2]
+        rmt_udp_port = tun_addr[3]
         rmt_udp_addr = (rmt_udp_ip, rmt_udp_port)
 
         try:

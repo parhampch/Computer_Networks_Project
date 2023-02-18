@@ -10,24 +10,14 @@ import argparse
 import random
 import time
 import threading
+import yaml
 
 buffer_size = 1024
 
 
 def parse_input_argument():
-    parser = argparse.ArgumentParser(description='This is a client program that create a tunnel\
-                                                  to the server over various TCP connections.')
-
-    parser.add_argument('-ut', '--udp-tunnel', action='append', required=True,
-                        help="Make a tunnel from the client to the server. The format is\
-                              'listening ip:listening port:remote ip:remote port'.")
-    parser.add_argument('-s', '--server', required=True,
-                        help="The IP address and (TCP) port number of the tunnel server.\
-                               The format is 'server ip:server port'.")
-    parser.add_argument('-v', '--verbosity', choices=['error', 'info', 'debug'], default='info',
-                        help="Determine the verbosity of the messages. The default value is 'info'.")
-
-    args = parser.parse_args()
+    xsfile = open('XServerConfig.yml', 'r')
+    args = yaml.safe_load(xsfile)
     return args
 
 
@@ -70,8 +60,8 @@ def handle_udp_conn_recv_tcp_send(stcp_socket, udp_socket, header):
 if __name__ == "__main__":
     args = parse_input_argument()
 
-    tcp_server_ip = args.server.split(':')[0]
-    tcp_server_port = int(args.server.split(':')[1])
+    tcp_server_ip = args['server'][0]
+    tcp_server_port = args['server'][1]
     tcp_server_addr = (tcp_server_ip, tcp_server_port)
 
     if args.verbosity == 'error':
@@ -87,7 +77,7 @@ if __name__ == "__main__":
     context.load_cert_chain('cert.pem', 'key.pem')
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("localhost", 1234))
+    s.bind(tcp_server_addr)
     s.listen()
 
     while True:
